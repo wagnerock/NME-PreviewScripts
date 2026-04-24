@@ -21,6 +21,12 @@
 }
 #>
 
+param(
+    [string]$StringParam,
+    [string]$NumberParam,
+    [string]$OptionalParam
+)
+
 Write-Output "=== Runtime Parameters ==="
 Write-Output "StringParam:   $StringParam"
 Write-Output "NumberParam:   $NumberParam"

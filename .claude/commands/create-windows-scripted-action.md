@@ -30,6 +30,10 @@ Save the file to `scripted-actions/windows-scripts/<Human Readable Name>.ps1`. U
 }
 #>
 
+param(
+    [string]$ParameterName
+)
+
 # ... script body ...
 
 ### End Script ###
@@ -40,6 +44,7 @@ Rules:
 - The `#tags:` line is optional but recommended.
 - The `<# Notes: #>` block is optional but should be included when the script has meaningful caveats, requirements, or behavior worth explaining.
 - The `<# Variables: #>` block is only needed if the script accepts runtime parameters. Omit it entirely if there are no parameters.
+- When a `<# Variables: #>` block is present, a matching `param()` block **must** immediately follow it. Every parameter declared in the Variables JSON must appear in the `param()` block. NME uses the Variables block for its UI, but PowerShell requires the `param()` block to actually receive the values.
 - The `### End Script ###` footer is always included.
 
 ## Predefined variables (do not redeclare these)
