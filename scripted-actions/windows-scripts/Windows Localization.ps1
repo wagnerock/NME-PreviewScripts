@@ -77,7 +77,7 @@ $localeMap = @{
 
 foreach ($locale in $Country) {
     if (-not $localeMap.ContainsKey($locale)) {
-        Write-Warning "Unknown locale '$locale' — skipping"
+        Write-Warning "Unknown locale '$locale' - skipping"
         continue
     }
 
