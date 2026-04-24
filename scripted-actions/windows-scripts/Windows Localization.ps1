@@ -7,8 +7,12 @@ Installs the language pack for the selected country and applies system locale, c
 preferred UI language, home location, and user language list settings. Optionally sets
 the most common time zone for that country.
 
-A reboot is required for all locale changes to take effect. Users must sign out and
-back in for per-user settings (culture, language list) to apply.
+Settings are applied to the SYSTEM account and then copied to the Welcome screen and
+the default user profile via Copy-UserInternationalSettingsToSystem. This means the
+localization will take effect for users who receive a fresh profile after the script runs.
+Users with an existing profile on the machine will not be affected.
+
+A reboot is required for all locale changes to take effect.
 
 If multiple countries are selected, all language packs will be installed and locale
 settings will be applied in order — the last selected country wins for system-level
@@ -89,7 +93,7 @@ foreach ($locale in $Country) {
     $langList = New-WinUserLanguageList -Language $locale
     Set-WinUserLanguageList $langList -Force
 
-    Install-Language $locale -CopyToSettings
+    Copy-UserInternationalSettingsToSystem -WelcomeScreen -NewUser
 
     if ($SetTimeZone -eq 'true') {
         Write-Host "Setting time zone to '$($settings.TimeZone)'..."
