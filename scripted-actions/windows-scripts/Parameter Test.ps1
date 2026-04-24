@@ -1,4 +1,5 @@
 #description: Outputs runtime parameters and predefined variables to verify parameter passing works correctly in Windows scripted actions.
+#execution mode: Combined
 #tags: Test, Debug
 
 <# Variables:

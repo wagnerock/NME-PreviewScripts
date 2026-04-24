@@ -1,4 +1,5 @@
 #description: Installs a language pack and configures system locale, culture, UI language, and home location for the selected country. Optionally sets the most common time zone.
+#execution mode: IndividualWithRestart
 #tags: Localization
 
 <# Notes:
