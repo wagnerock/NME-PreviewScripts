@@ -52,6 +52,11 @@ param(
     [string]$SetTimeZone = 'false'
 )
 
+$ScriptName = 'Windows Localization'
+$LogDir = "C:\Windows\Temp\NMWLogs\ScriptedActions\$ScriptName"
+New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+Start-Transcript -Path "$LogDir\$(Get-Date -Format 'yyyyMMdd-HHmmss').txt" -Force
+
 $localeMap = @{
     'en-GB' = @{ GeoId = 242; TimeZone = 'GMT Standard Time' }
     'nl-NL' = @{ GeoId = 176; TimeZone = 'W. Europe Standard Time' }
@@ -72,7 +77,7 @@ foreach ($locale in $Country) {
     }
 
     $settings = $localeMap[$locale]
-    Write-Output "Applying localization for $locale..."
+    Write-Host "Applying localization for $locale..."
 
     Install-Language $locale
     Set-WinSystemLocale -SystemLocale $locale
@@ -86,11 +91,13 @@ foreach ($locale in $Country) {
     Install-Language $locale -CopyToSettings
 
     if ($SetTimeZone -eq 'true') {
-        Write-Output "Setting time zone to '$($settings.TimeZone)'..."
+        Write-Host "Setting time zone to '$($settings.TimeZone)'..."
         Set-TimeZone -Id $settings.TimeZone
     }
 
-    Write-Output "Localization for $locale applied successfully."
+    Write-Host "Localization for $locale applied successfully."
 }
+
+Stop-Transcript
 
 ### End Script ###

@@ -27,18 +27,25 @@ param(
     [string]$OptionalParam
 )
 
-Write-Output "=== Runtime Parameters ==="
-Write-Output "StringParam:   $StringParam"
-Write-Output "NumberParam:   $NumberParam"
-Write-Output "OptionalParam: $OptionalParam"
+$ScriptName = 'Parameter Test'
+$LogDir = "C:\Windows\Temp\NMWLogs\ScriptedActions\$ScriptName"
+New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+Start-Transcript -Path "$LogDir\$(Get-Date -Format 'yyyyMMdd-HHmmss').txt" -Force
 
-Write-Output ""
-Write-Output "=== Predefined Variables ==="
-Write-Output "AzureVMName:            $AzureVMName"
-Write-Output "AzureResourceGroupName: $AzureResourceGroupName"
-Write-Output "AzureRegionName:        $AzureRegionName"
-Write-Output "AzureSubscriptionId:    $AzureSubscriptionId"
-Write-Output "AzureSubscriptionName:  $AzureSubscriptionName"
-Write-Output "HostPoolName:           $HostPoolName"
+Write-Host "=== Runtime Parameters ==="
+Write-Host "StringParam:   $StringParam"
+Write-Host "NumberParam:   $NumberParam"
+Write-Host "OptionalParam: $OptionalParam"
+
+Write-Host ""
+Write-Host "=== Predefined Variables ==="
+Write-Host "AzureVMName:            $AzureVMName"
+Write-Host "AzureResourceGroupName: $AzureResourceGroupName"
+Write-Host "AzureRegionName:        $AzureRegionName"
+Write-Host "AzureSubscriptionId:    $AzureSubscriptionId"
+Write-Host "AzureSubscriptionName:  $AzureSubscriptionName"
+Write-Host "HostPoolName:           $HostPoolName"
+
+Stop-Transcript
 
 ### End Script ###
