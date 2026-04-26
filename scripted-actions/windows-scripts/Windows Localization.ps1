@@ -84,19 +84,31 @@ foreach ($locale in $Country) {
     $settings = $localeMap[$locale]
     Write-Host "Applying localization for $locale..."
 
+    Write-Host "[$locale] Installing language pack..."
     Install-Language $locale
+    Write-Host "[$locale] Language pack installed."
+
+    Write-Host "[$locale] Setting system locale..."
     Set-WinSystemLocale -SystemLocale $locale
+
+    Write-Host "[$locale] Setting culture..."
     Set-Culture -CultureInfo $locale
+
+    Write-Host "[$locale] Setting preferred UI language..."
     Set-SystemPreferredUILanguage $locale
+
+    Write-Host "[$locale] Setting home location (GeoId $($settings.GeoId))..."
     Set-WinHomeLocation -GeoId $settings.GeoId
 
+    Write-Host "[$locale] Setting user language list..."
     $langList = New-WinUserLanguageList -Language $locale
     Set-WinUserLanguageList $langList -Force
 
-    Copy-UserInternationalSettingsToSystem -WelcomeScreen -NewUser
+    Write-Host "[$locale] Copying settings to Welcome screen and new user profiles..."
+    Copy-UserInternationalSettingsToSystem -WelcomeScreen $true -NewUser $true
 
     if ($SetTimeZone -eq 'true') {
-        Write-Host "Setting time zone to '$($settings.TimeZone)'..."
+        Write-Host "[$locale] Setting time zone to '$($settings.TimeZone)'..."
         Set-TimeZone -Id $settings.TimeZone
     }
 
