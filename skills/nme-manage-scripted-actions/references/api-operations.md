@@ -27,14 +27,14 @@ All requests: `-H "Authorization: Bearer $TOKEN"`
 GET /api/v1/scripted-actions
 ```
 
-Returns `{ payload: [ {id, name, script, executionMode, executionEnvironment, executionTimeout, tags, description}, ... ] }`
+Returns an array directly: `[ {id, name, script, executionMode, executionEnvironment, executionTimeout, tags, description}, ... ]`
 
 **Note**: There is no working GET-by-ID endpoint — `GET /api/v1/scripted-actions/{id}` returns
 **405 Method Not Allowed**. Always fetch the full list and filter by ID:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" "${NME_BASE_URL}/api/v1/scripted-actions" \
-  | jq --argjson id 102 '.payload[] | select(.id == $id)'
+  | jq --argjson id 102 '.[] | select(.id == $id)'
 ```
 
 ### Create
@@ -135,6 +135,42 @@ Used when the script is run in a host pool context (CustomScript or runbook atta
 Does **not** support `paramsBindings` — use the runbook execution endpoint above if you need
 runtime parameters.
 
+**Request body:**
+```json
+{
+  "jobPayload": {
+    "config": {
+      "activeDirectoryId": null,
+      "scriptedActions": [
+        {
+          "type": "Action",
+          "id": 123,
+          "params": {},
+          "groupParams": {}
+        }
+      ]
+    },
+    "bulkJobParams": {
+      "restartVms": true,
+      "excludeNotRunning": false,
+      "sessionHostsToProcessNames": ["host-fqdn.domain.com"],
+      "enableDrainMode": false,
+      "taskParallelism": 5,
+      "countFailedTaskToStopWork": 1,
+      "minutesBeforeRemove": null,
+      "message": null
+    }
+  },
+  "failurePolicy": null
+}
+```
+
+**Important notes:**
+- Host names in `sessionHostsToProcessNames` must be FQDNs (e.g., `AD-HP-e43a.entse4.local`)
+- The scripted action must be associated with the host pool (via onCreate/onStart lifecycle events)
+  or the hosts will be filtered out as "unassociated"
+- `sessionHostsToProcessNames: null` runs on all hosts in the pool
+
 ---
 
 ## Job Polling
@@ -152,6 +188,15 @@ GET /api/v1/job/{jobId}/tasks
 ```
 
 Returns array of task objects with `name`, `status`, `resultPlain` (the script stdout/stderr).
+
+**Note on CustomScript logs**: For Windows (CustomScript) scripted actions, the full script
+output is written to a transcript log on the VM at
+`C:\Windows\Temp\NMWLogs\ScriptedActions\<script-name>-<timestamp>.log`. The API's `job-output`
+only shows what was written to stdout during execution. To retrieve the full transcript, you can:
+
+1. Use the NME UI to upload logs to an Azure storage account
+2. Access the VM directly and read the log file
+3. Create a separate scripted action to upload logs to storage
 
 To extract runbook output from a failed job:
 ```bash

@@ -4,7 +4,7 @@ description: >
   Manage scripted actions in Nerdio Manager for Enterprise (NME) via the REST API.
   Supports listing, showing, creating, updating, deleting, and executing scripted actions,
   and polling async job status.
-argument-hint: "list [filter] | show <id> | create <file.ps1> | update <id> <file.ps1> | delete <id> | execute <id> [--sub <subId>] [--param key=value ...] | job <jobId> | job-output <jobId>"
+argument-hint: "list [filter] | show <id> | create <file.ps1> | update <id> <file.ps1> | delete <id> | execute <id> [--sub <subId>] [--param key=value ...] | execute-on-hostpool <id> | hosts <subId> <rg> <hp> | job <jobId> | job-output <jobId>"
 allowed-tools: Bash(curl *) Bash(jq *) Bash(bash *) Bash(chmod *) Bash(cat *) Bash(pwsh *)
 ---
 
@@ -53,7 +53,9 @@ Both scripts accept identical commands and flags.
 | `create <file.ps1> [options]` | Create a new scripted action from a PowerShell file |
 | `update <id> <file.ps1>` | Replace script body of an existing scripted action |
 | `delete <id>` | Delete a scripted action by ID |
-| `execute <id> --sub <subId> [--param k=v ...]` | Execute a scripted action; returns a job |
+| `execute <id> --sub <subId>` | Execute an Azure Automation runbook scripted action |
+| `execute-on-hostpool <id>` | Execute a Windows scripted action on a host pool |
+| `hosts <subId> <rg> <hp>` | List hosts in a host pool with their FQDNs |
 | `job <jobId>` | Poll status of an async NME job |
 | `job-output <jobId>` | Get full output/log of a completed or failed NME job |
 

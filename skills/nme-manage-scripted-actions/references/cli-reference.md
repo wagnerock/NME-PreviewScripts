@@ -108,3 +108,56 @@ Get the full output/log of a completed or failed NME job.
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/nme-api.sh" job-output <jobId>
 ```
+
+---
+
+## `execute-on-hostpool <id> [options]`
+
+Execute a Windows (CustomScript) scripted action on a host pool. This runs the script directly on
+the specified host(s) in the pool.
+
+**Important**: Host names must be FQDNs (e.g., `AD-HP-e43a.entse4.local`, not `AD-HP-e43a`).
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/nme-api.sh" execute-on-hostpool <id> \
+  --sub <subscriptionId> \
+  --rg <resourceGroup> \
+  --hostpool <hostPoolName> \
+  --host <fqdn> ...
+```
+
+Options:
+- `--sub <subscriptionId>` - Azure subscription ID (required)
+- `--rg <resourceGroup>` - Resource group containing the host pool (required)
+- `--hostpool <name>` - Host pool name (required)
+- `--host <fqdn>` - Host FQDN to run on (required, repeat for multiple hosts)
+- `--no-restart` - Don't restart VMs before running
+- `--exclude-not-running` - Skip VMs that aren't running
+- `--parallelism <n>` - Max concurrent tasks (default: 5)
+- `--fail-count <n>` - Fail job after N failures (default: 1)
+- `--drain` - Enable drain mode
+
+---
+
+## `hosts <subId> <rg> <hostPool>`
+
+List hosts in a host pool with their FQDNs, power state, and status. Use this to get the correct
+FQDN for the `--host` flag when executing on a host pool.
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/nme-api.sh" hosts <subscriptionId> <resourceGroup> <hostPoolName>
+```
+
+Output: JSON array of host objects with `hostName`, `powerState`, and `status`.
+
+---
+
+## `job <jobId>`
+
+Get status of an async NME job.
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/nme-api.sh" job <jobId>
+```
+
+Job status lifecycle: `Pending` → `Running` → `Completed` | `Failed`
