@@ -52,9 +52,9 @@ case "$CMD" in
     RESULT=$(curl -s -H "Authorization: Bearer $TOKEN" "${NME_BASE_URL}/api/v1/scripted-actions")
     if [[ -n "$FILTER" ]]; then
       echo "$RESULT" | jq --arg f "$FILTER" \
-        '[.payload[] | select(.name | ascii_downcase | contains($f | ascii_downcase)) | {id, name, executionEnvironment, executionMode, tags}]'
+        '[.payload[]? // .[]? | select(.name | ascii_downcase | contains($f | ascii_downcase)) | {id, name, executionEnvironment, executionMode, tags}]'
     else
-      echo "$RESULT" | jq '[.payload[] | {id, name, executionEnvironment, executionMode, tags}]'
+      echo "$RESULT" | jq '[.payload[]? // .[]? | {id, name, executionEnvironment, executionMode, tags}]'
     fi
     ;;
 

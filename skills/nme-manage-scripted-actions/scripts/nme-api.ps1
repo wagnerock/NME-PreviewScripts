@@ -58,7 +58,8 @@ $authHeader = @{ Authorization = "Bearer $token" }
 # Helpers
 # ---------------------------------------------------------------------------
 function Get-AllActions {
-    (Invoke-RestMethod -Uri "$baseUrl/api/v1/scripted-actions" -Headers $authHeader).payload
+    $response = Invoke-RestMethod -Uri "$baseUrl/api/v1/scripted-actions" -Headers $authHeader
+    if ($response -is [System.Array]) { $response } else { $response.payload }
 }
 
 function Parse-Flags {
