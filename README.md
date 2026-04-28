@@ -51,3 +51,23 @@ NME_SCOPE          api://<nme-app-id>/.default
 ### nme-write-scripted-actions
 
 Write, review, and improve NME scripted actions. Invoke with `/nme-write-scripted-actions` in Claude Code. Includes reference guides for both Azure Runbook and Windows script conventions.
+
+## Installing Skills in Claude Code
+
+See the official [Claude Code skills documentation](https://docs.anthropic.com/en/docs/claude-code/slash-commands) for full details.
+
+Skills are installed by copying the skill directory into `~/.claude/skills/`:
+
+```bash
+cp -r skills/nme-manage-scripted-actions ~/.claude/skills/
+cp -r skills/nme-write-scripted-actions ~/.claude/skills/
+```
+
+Once installed, invoke a skill by name in Claude Code:
+
+```
+/nme-manage-scripted-actions list
+/nme-write-scripted-actions
+```
+
+Claude will also use skills automatically when the task matches their description.
