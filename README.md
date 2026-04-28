@@ -16,14 +16,11 @@ skills/                 Claude / AI assistant skills for managing NME via the AP
 
 ## Scripted Actions
 
-Scripts in `scripted-actions/` are PowerShell files intended for upload to and execution in a live NME instance. They follow a standard header convention:
+Scripts in `scripted-actions/` are PowerShell files intended for upload to and execution in a live NME instance. 
 
-```powershell
-#description: What this script does
-#execution environment: AzureAutomation | CustomScript
-#execution mode: Individual | Combined | IndividualWithRestart
-#tags: Tag1, Tag2
-```
+These are experimental scripted actions and not intended for production use.
+
+You can link NME to this repository to import these runbooks.
 
 **Azure Runbooks** (`azure-runbooks/`) run in NME's Azure Automation account. They have access to Az PowerShell modules and run as NME's service principal — not on a VM.
 
