@@ -38,6 +38,21 @@ if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
   exit 1
 fi
 
+# ---------------------------------------------------------------------------
+# API Error Handler
+# ---------------------------------------------------------------------------
+check_api_error() {
+  local response="$1"
+  local operation="$2"
+
+  local error_msg=$(echo "$response" | jq -r 'if type == "object" then .errorMessage // empty else empty end')
+  if [[ -n "$error_msg" && "$error_msg" != "null" ]]; then
+    echo "ERROR: $operation failed" >&2
+    echo "       $error_msg" >&2
+    exit 1
+  fi
+}
+
 CMD="${1:-help}"
 shift || true
 
@@ -50,6 +65,7 @@ case "$CMD" in
   list)
     FILTER="${1:-}"
     RESULT=$(curl -s -H "Authorization: Bearer $TOKEN" "${NME_BASE_URL}/api/v1/scripted-actions")
+    check_api_error "$RESULT" "List scripted actions"
     if [[ -n "$FILTER" ]]; then
       echo "$RESULT" | jq --arg f "$FILTER" \
         '[.[]? | select(.name | ascii_downcase | contains($f | ascii_downcase)) | {id, name, executionEnvironment, executionMode, tags}]'
@@ -62,8 +78,9 @@ case "$CMD" in
   # Note: GET /api/v1/scripted-actions/{id} returns 405 — always list+filter
   get)
     ID="${1:?Usage: get <id>}"
-    curl -s -H "Authorization: Bearer $TOKEN" "${NME_BASE_URL}/api/v1/scripted-actions" \
-      | jq --argjson id "$ID" '.[] | select(.id == $id)'
+    RESULT=$(curl -s -H "Authorization: Bearer $TOKEN" "${NME_BASE_URL}/api/v1/scripted-actions")
+    check_api_error "$RESULT" "Get scripted action"
+    echo "$RESULT" | jq --argjson id "$ID" '.[] | select(.id == $id)'
     ;;
 
   # ---- create <file.ps1> [options] -----------------------------------------
@@ -79,10 +96,20 @@ case "$CMD" in
 
     # Parse header metadata from script
     HEADER_DESC=$(grep -m1 '^#description:' "$SCRIPT_FILE" 2>/dev/null | sed 's/^#description:[[:space:]]*//' || true)
+    HEADER_ENV=$(grep -m1 '^#execution environment:' "$SCRIPT_FILE" 2>/dev/null | sed 's/^#execution environment:[[:space:]]*//' || true)
     HEADER_MODE=$(grep -m1 '^#execution mode:' "$SCRIPT_FILE" 2>/dev/null | sed 's/^#execution mode:[[:space:]]*//' || true)
     HEADER_TAGS=$(grep -m1 '^#tags:' "$SCRIPT_FILE" 2>/dev/null | sed 's/^#tags:[[:space:]]*//' || true)
     [[ -n "$HEADER_DESC" ]] && DESC="$HEADER_DESC"
     [[ -n "$HEADER_MODE" ]] && MODE="$HEADER_MODE"
+    if [[ -n "$HEADER_ENV" ]]; then
+      ENV="$HEADER_ENV"
+    else
+      # Infer from directory name if no header present
+      case "$(basename "$(dirname "$SCRIPT_FILE")")" in
+        windows-scripts) ENV="CustomScript" ;;
+        azure-runbooks)  ENV="AzureAutomation" ;;
+      esac
+    fi
     if [[ -n "$HEADER_TAGS" ]]; then
       TAGS=$(echo "$HEADER_TAGS" | jq -R 'split(", ")')
     fi
@@ -104,7 +131,7 @@ case "$CMD" in
     # executionTimeout: only valid for AzureAutomation + Individual
     if [[ "$ENV" == "AzureAutomation" && "$MODE" == "Individual" ]]; then
       TIMEOUT=90
-      jq -n \
+      PAYLOAD=$(jq -n \
         --arg name "$NAME" \
         --arg script "$SCRIPT" \
         --arg env "$ENV" \
@@ -112,21 +139,24 @@ case "$CMD" in
         --argjson timeout "$TIMEOUT" \
         --argjson tags "$TAGS" \
         --arg desc "$DESC" \
-        '{name: $name, script: $script, executionEnvironment: $env, executionMode: $mode, executionTimeout: $timeout, tags: $tags, description: $desc}'
+        '{name: $name, script: $script, executionEnvironment: $env, executionMode: $mode, executionTimeout: $timeout, tags: $tags, description: $desc}')
     else
-      jq -n \
+      PAYLOAD=$(jq -n \
         --arg name "$NAME" \
         --arg script "$SCRIPT" \
         --arg env "$ENV" \
         --arg mode "$MODE" \
         --argjson tags "$TAGS" \
         --arg desc "$DESC" \
-        '{name: $name, script: $script, executionEnvironment: $env, executionMode: $mode, tags: $tags, description: $desc}'
-    fi \
-    | curl -s -X POST "${NME_BASE_URL}/api/v1/scripted-actions" \
+        '{name: $name, script: $script, executionEnvironment: $env, executionMode: $mode, tags: $tags, description: $desc}')
+    fi
+
+    RESPONSE=$(echo "$PAYLOAD" | curl -s -X POST "${NME_BASE_URL}/api/v1/scripted-actions" \
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
-        -d @-
+        -d @-)
+    check_api_error "$RESPONSE" "Create scripted action"
+    echo "$RESPONSE" | jq '.'
     ;;
 
   # ---- update <id> <file.ps1> [options] ------------------------------------
@@ -151,7 +181,26 @@ case "$CMD" in
     TAGS=$(echo "$CURRENT"    | jq '[.tags[]?]')
     DESC=$(echo "$CURRENT"    | jq -r '.description // ""')
 
-    # Allow overrides via CLI flags
+    # Override from script file headers (take precedence over NME metadata)
+    HEADER_ENV=$(grep -m1 '^#execution environment:' "$SCRIPT_FILE" 2>/dev/null | sed 's/^#execution environment:[[:space:]]*//' || true)
+    HEADER_MODE=$(grep -m1 '^#execution mode:' "$SCRIPT_FILE" 2>/dev/null | sed 's/^#execution mode:[[:space:]]*//' || true)
+    HEADER_TAGS=$(grep -m1 '^#tags:' "$SCRIPT_FILE" 2>/dev/null | sed 's/^#tags:[[:space:]]*//' || true)
+    HEADER_DESC=$(grep -m1 '^#description:' "$SCRIPT_FILE" 2>/dev/null | sed 's/^#description:[[:space:]]*//' || true)
+    if [[ -n "$HEADER_ENV" ]]; then
+      ENV="$HEADER_ENV"
+    else
+      case "$(basename "$(dirname "$SCRIPT_FILE")")" in
+        windows-scripts) ENV="CustomScript" ;;
+        azure-runbooks)  ENV="AzureAutomation" ;;
+      esac
+    fi
+    [[ -n "$HEADER_MODE" ]] && MODE="$HEADER_MODE"
+    [[ -n "$HEADER_DESC" ]] && DESC="$HEADER_DESC"
+    if [[ -n "$HEADER_TAGS" ]]; then
+      TAGS=$(echo "$HEADER_TAGS" | jq -R 'split(", ")')
+    fi
+
+    # Allow CLI flag overrides (highest precedence)
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --name)  NAME="$2";  shift 2 ;;
@@ -165,29 +214,52 @@ case "$CMD" in
 
     SCRIPT=$(cat "$SCRIPT_FILE")
 
-    jq -n \
-      --arg name "$NAME" \
-      --arg script "$SCRIPT" \
-      --arg env "$ENV" \
-      --arg mode "$MODE" \
-      --argjson timeout "$TIMEOUT" \
-      --argjson tags "$TAGS" \
-      --arg desc "$DESC" \
-      '{name: $name, script: $script, executionEnvironment: $env, executionMode: $mode, executionTimeout: $timeout, tags: $tags, description: $desc}' \
-    | curl -s -X PATCH "${NME_BASE_URL}/api/v1/scripted-actions/${ID}" \
+    # executionTimeout is only valid for AzureAutomation + Individual
+    if [[ "$ENV" == "AzureAutomation" && "$MODE" == "Individual" ]]; then
+      PAYLOAD=$(jq -n \
+        --arg name "$NAME" \
+        --arg script "$SCRIPT" \
+        --arg env "$ENV" \
+        --arg mode "$MODE" \
+        --argjson timeout "$TIMEOUT" \
+        --argjson tags "$TAGS" \
+        --arg desc "$DESC" \
+        '{name: $name, script: $script, executionEnvironment: $env, executionMode: $mode, executionTimeout: $timeout, tags: $tags, description: $desc}')
+    else
+      PAYLOAD=$(jq -n \
+        --arg name "$NAME" \
+        --arg script "$SCRIPT" \
+        --arg env "$ENV" \
+        --arg mode "$MODE" \
+        --argjson tags "$TAGS" \
+        --arg desc "$DESC" \
+        '{name: $name, script: $script, executionEnvironment: $env, executionMode: $mode, tags: $tags, description: $desc}')
+    fi
+
+    RESPONSE=$(echo "$PAYLOAD" | curl -s -X PATCH "${NME_BASE_URL}/api/v1/scripted-actions/${ID}" \
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
-        -d @-
+        -d @-)
+    ERROR_MSG=$(echo "$RESPONSE" | jq -r 'if type == "object" then .errorMessage // empty else empty end')
+    if [[ "$ERROR_MSG" == "GithubSha" ]]; then
+      echo "ERROR: Scripted action $ID is synced from GitHub and cannot be modified via the API." >&2
+      echo "GITHUB_SYNCED" >&2
+      exit 2
+    fi
+    check_api_error "$RESPONSE" "Update scripted action"
+    echo "$RESPONSE" | jq '.'
     ;;
 
   # ---- delete <id> ---------------------------------------------------------
   delete)
     ID="${1:?Usage: delete <id>}"
     # NOTE: requires Content-Type header + {"force":true} body — 415 without header, 400 without body
-    curl -s -X DELETE "${NME_BASE_URL}/api/v1/scripted-actions/${ID}" \
+    RESPONSE=$(curl -s -X DELETE "${NME_BASE_URL}/api/v1/scripted-actions/${ID}" \
       -H "Authorization: Bearer $TOKEN" \
       -H "Content-Type: application/json" \
-      -d '{"force": true}'
+      -d '{"force": true}')
+    check_api_error "$RESPONSE" "Delete scripted action"
+    echo "$RESPONSE" | jq '.'
     ;;
 
   # ---- execute <id> --sub <subId> [--param key=value ...] ------------------
@@ -224,15 +296,18 @@ case "$CMD" in
       exit 1
     fi
 
-    jq -n \
+    PAYLOAD=$(jq -n \
       --arg sub "$SUB" \
       --argjson wait "$WAIT" \
       --argjson params "$PARAMS" \
-      '{subscriptionId: $sub, adConfigId: null, minutesToWait: $wait, paramsBindings: $params}' \
-    | curl -s -X POST "${NME_BASE_URL}/api/v1/scripted-actions/${ID}/execution" \
+      '{subscriptionId: $sub, adConfigId: null, minutesToWait: $wait, paramsBindings: $params}')
+
+    RESPONSE=$(echo "$PAYLOAD" | curl -s -X POST "${NME_BASE_URL}/api/v1/scripted-actions/${ID}/execution" \
         -H "Authorization: Bearer $TOKEN" \
         -H "Content-Type: application/json" \
-        -d @-
+        -d @-)
+    check_api_error "$RESPONSE" "Execute scripted action"
+    echo "$RESPONSE" | jq '.'
     ;;
 
   # ---- execute-on-hostpool <id> [options] ----------------------------------
@@ -247,10 +322,9 @@ case "$CMD" in
     fi
     shift
 
-    # Prompt for missing context
-    SUB="${SUB:-}"
-    RG="${RG:-}"
-    HOSTPOOL="${HOSTPOOL:-}"
+    SUB=""
+    RG=""
+    HOSTPOOL=""
     HOSTS="[]"
     PARAMS="{}"
     RESTART=true
@@ -275,6 +349,18 @@ case "$CMD" in
         --parallelism) PARALLELISM="$2"; shift 2 ;;
         --fail-count) FAIL_COUNT="$2"; shift 2 ;;
         --drain) DRAIN=true; shift ;;
+        --param)
+          KEY="${2%%=*}"
+          VAL="${2#*=}"
+          PARAMS=$(echo "$PARAMS" | jq --arg k "$KEY" --arg v "$VAL" '.[$k] = {value: $v, isSecure: false}')
+          shift 2
+          ;;
+        --secure-param)
+          KEY="${2%%=*}"
+          VAL="${2#*=}"
+          PARAMS=$(echo "$PARAMS" | jq --arg k "$KEY" --arg v "$VAL" '.[$k] = {value: $v, isSecure: true}')
+          shift 2
+          ;;
         *) shift ;;
       esac
     done
@@ -296,7 +382,80 @@ case "$CMD" in
 
     if [[ -z "$SUB" || -z "$RG" || -z "$HOSTPOOL" ]]; then
       echo "ERROR: subscription ID, resource group, and host pool name are required." >&2
+      echo "" >&2
+      echo "Provide them via flags:" >&2
+      echo "  --sub <subscriptionId> --rg <resourceGroup> --hostpool <hostPoolName>" >&2
+      echo "" >&2
+      echo "Or run without flags to be prompted interactively." >&2
       exit 1
+    fi
+
+    # Validate host FQDN format
+    validate_fqdn() {
+      local host="$1"
+      # Check if host contains a dot (required for FQDN)
+      if [[ "$host" != *.* ]]; then
+        return 1
+      fi
+      # Check if host has at least 2 parts separated by dot
+      local parts=$(echo "$host" | tr '.' '\n' | wc -l)
+      if [[ "$parts" -lt 2 ]]; then
+        return 1
+      fi
+      return 0
+    }
+
+    # Check each host for FQDN format
+    INVALID_HOSTS=()
+    while IFS= read -r host; do
+      if ! validate_fqdn "$host"; then
+        INVALID_HOSTS+=("$host")
+      fi
+    done < <(echo "$HOSTS" | jq -r '.[]')
+
+    if [[ ${#INVALID_HOSTS[@]} -gt 0 ]]; then
+      echo "ERROR: Host name(s) must be a full FQDN (e.g., AD-HP-e43a.entse4.local), not just the VM name." >&2
+      echo "" >&2
+      echo "Invalid host(s) provided:" >&2
+      for h in "${INVALID_HOSTS[@]}"; do
+        echo "  - $h" >&2
+      done
+      echo "" >&2
+      echo "The NME API requires the complete FQDN to locate and execute scripts on VMs." >&2
+      echo "Please run again with the full FQDN for each host." >&2
+      exit 1
+    fi
+
+    # Get scripted action to check for required parameters
+    SCRIPTED_ACTION=$(curl -s -H "Authorization: Bearer $TOKEN" "${NME_BASE_URL}/api/v1/scripted-actions" | jq --argjson id "$ID" '.[] | select(.id == $id)')
+    SCRIPT_BODY=$(echo "$SCRIPTED_ACTION" | jq -r '.script // ""')
+
+    # Parse required parameters from script header (JSON Variables block in comment)
+    # Extract JSON from between <# Variables: and #>
+    REQUIRED_PARAMS=()
+    if [[ -n "$SCRIPT_BODY" ]]; then
+      JSON_BLOCK=$(echo "$SCRIPT_BODY" | perl -0777 -ne 'if (/<# Variables:\s*(.*?)\s*#>/s) { print $1 }' 2>/dev/null || true)
+      if [[ -n "$JSON_BLOCK" ]]; then
+        PARAM_NAMES=$(echo "$JSON_BLOCK" | jq -r '.Variables | keys[]' 2>/dev/null || true)
+        while IFS= read -r PARAM_NAME; do
+          if [[ -z "$PARAM_NAME" || "$PARAM_NAME" == "Variables" ]]; then
+            continue
+          fi
+          if echo "$JSON_BLOCK" | jq -e --arg p "$PARAM_NAME" '.Variables[$p].IsRequired == true' >/dev/null 2>&1; then
+            REQUIRED_PARAMS+=("$PARAM_NAME")
+          fi
+        done <<< "$PARAM_NAMES"
+      fi
+    fi
+
+    # Prompt for missing required parameters
+    if [[ ${#REQUIRED_PARAMS[@]} -gt 0 ]]; then
+      for param in "${REQUIRED_PARAMS[@]}"; do
+        if [[ -z "$(echo "$PARAMS" | jq -r --arg p "$param" '.[$p].value // ""')" ]]; then
+          read -r -p "Enter value for required parameter '$param': " VALUE
+          PARAMS=$(echo "$PARAMS" | jq --arg k "$param" --arg v "$VALUE" '.[$k] = {value: $v, isSecure: false}')
+        fi
+      done
     fi
 
     # Build the request body for host pool script execution
@@ -343,19 +502,32 @@ case "$CMD" in
 
     echo "$RESPONSE" | jq '.'
 
+    # Check for errors in response
+    ERROR_MSG=$(echo "$RESPONSE" | jq -r '.errorMessage // empty')
+    if [[ -n "$ERROR_MSG" && "$ERROR_MSG" != "null" ]]; then
+      echo "" >&2
+      echo "ERROR: Job creation failed" >&2
+      echo "       $ERROR_MSG" >&2
+      if [[ "$ERROR_MSG" == *"FQDN"* ]] || [[ "$ERROR_MSG" == *"host"* ]] || [[ "$ERROR_MSG" == *"sessionHosts"* ]]; then
+        echo "" >&2
+        echo "NOTE: The NME API requires full FQDNs for host names (e.g., AD-HP-e43a.entse4.local)," >&2
+        echo "      not just VM names. Please verify and retry with complete FQDNs." >&2
+      fi
+      exit 1
+    fi
+
     # Check if job was created and warn about log upload for CustomScript
     JOB_ID=$(echo "$RESPONSE" | jq -r '.job.id // empty')
     if [[ -n "$JOB_ID" ]]; then
       echo ""
       echo "Job $JOB_ID created successfully."
       echo ""
-      echo "NOTE: For Windows (CustomScript) scripted actions, full logs are stored locally"
-      echo "      on the VM at: C:\Windows\Temp\NMWLogs\ScriptedActions\"
-      echo "      Use the NME UI to upload logs to a storage account for access."
-      echo "      Run 'nme-api.sh job-output $JOB_ID' to view stdout from the execution."
-    fi
-    ;;
-      fi
+      echo "NOTE: Script output is not available via the NME API for Windows (CustomScript) actions."
+      echo "      To view results, either:"
+      echo "        1. Check the NME portal — open the job and expand 'VM Extension Details'"
+      echo "        2. Retrieve the Custom Script Extension result via Azure CLI:"
+      echo "           az vm extension show --resource-group <rg> --vm-name <vm> \\"
+      echo "             --name CustomScriptExtension --query 'instanceView.statuses'"
     fi
     ;;
 
@@ -372,10 +544,10 @@ case "$CMD" in
 
     # Check if any task failed
     FAILED=$(echo "$JOBTASKS" | jq '[.[] | select(.status == "Failed")] | length')
-    if [[ "$FAILED" -gt 0 ]]; then
-      echo "WARNING: Job has $FAILED failed task(s). For Windows (CustomScript) scripted actions,"
+    if [ "$FAILED" -gt 0 ]; then
+      echo 'WARNING: Job has '"$FAILED"' failed task(s). For Windows (CustomScript) scripted actions,'
       echo "         full logs are stored locally on the VM at:"
-      echo "         C:\Windows\Temp\NMWLogs\ScriptedActions\"
+      echo "         C:\\Windows\\Temp\\NMWLogs\\ScriptedActions\\"
       echo "         Use the NME UI to upload logs to a storage account for access."
       echo ""
     fi

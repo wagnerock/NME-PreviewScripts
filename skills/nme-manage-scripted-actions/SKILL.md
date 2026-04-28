@@ -61,3 +61,28 @@ Both scripts accept identical commands and flags.
 
 For full syntax and flags, see [`references/cli-reference.md`](references/cli-reference.md).
 For API details, see [`references/api-operations.md`](references/api-operations.md).
+
+## Upload / Create Workflow
+
+When the user asks to upload or create a scripted action from a `.ps1` file:
+
+1. Derive the intended name from the filename (strip `.ps1`).
+2. Run `list "<name>"` to check for an exact name match.
+3. **If a match exists**, stop and ask the user:
+   > A scripted action named **"<name>"** already exists (ID <id>). Overwrite it, or cancel?
+   - **Overwrite** → run `update <id> <file.ps1>`
+   - **Cancel** → abort
+4. **If no match**, run `create <file.ps1>`.
+
+## GitHub-Synced Action Handling
+
+When `update` exits with code 2 and stderr contains `GITHUB_SYNCED`, the action is managed by a GitHub integration and cannot be modified via the API.
+
+Inform the user:
+> **"<name>"** (ID <id>) is synced from GitHub — it cannot be updated via the API.
+> Options:
+> 1. **Create with a different name** — upload as a new, unsynced scripted action
+> 2. **Abort** — do nothing
+
+- If the user chooses option 1, ask for a new name, then run `create <file.ps1> --name "<new name>"`.
+- If the user chooses option 2, stop.

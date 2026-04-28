@@ -1,4 +1,7 @@
 .claude/
 .DS_Store
 .aider*
-nme-7.7-swaggner.json
+swagger.json
+
+# Session files
+SESSION_RESUME.MD
