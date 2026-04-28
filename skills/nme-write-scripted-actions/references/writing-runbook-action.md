@@ -115,6 +115,21 @@ Write-Warning "Non-fatal issue"    # logged, job continues
 Write-Error "..." -ErrorAction Continue  # logged, continues (not recommended)
 ```
 
+### Catch Blocks — Always Write to the Error Stream
+
+NME surfaces the PowerShell error output stream in the job log, but if the job stops due to an unhandled exception the exception itself may not appear there. Always explicitly write caught exceptions to the error stream before rethrowing:
+
+```powershell
+try {
+    # ... operation ...
+} catch {
+    Write-Error $_.Exception.Message
+    throw
+}
+```
+
+This ensures the exception message is visible in the NME job output regardless of how the job terminates.
+
 ## Template
 
 ```powershell
@@ -134,7 +149,12 @@ $ErrorActionPreference = 'Stop'
 
 Write-Output "=== Starting: $($MyParam) ==="
 
-# ... script body ...
+try {
+    # ... script body ...
 
-Write-Output "=== Done ==="
+    Write-Output "=== Done ==="
+} catch {
+    Write-Error $_.Exception.Message
+    throw
+}
 ```
