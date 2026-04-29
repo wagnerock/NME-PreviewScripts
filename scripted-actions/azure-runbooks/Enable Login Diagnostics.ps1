@@ -18,6 +18,12 @@ and updates the same workbook without creating duplicates.
 
 Workspace is auto-discovered from host pool diagnostic settings, with a fallback to the AVD
 Insights DCR (microsoft-avdi-*) in the subscription.
+
+AUTOSCALE WARNING: For stopped VMs, this script temporarily enables drain mode before starting
+them and restores the original state when done. This can interfere with NME autoscaling —
+autoscale may skip drain-mode hosts when making scaling decisions, or may conflict with the
+start/stop operations this script performs. Run during off-peak hours when autoscale is unlikely
+to be active (e.g., outside business hours or during a scheduled maintenance window).
 #>
 
 <#variables:
