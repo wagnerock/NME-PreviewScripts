@@ -226,6 +226,28 @@ switch ($Command) {
             Write-Host "GITHUB_SYNCED"
             exit 2
         }
+        # NME bug: if a CustomScript record has executionTimeout set in the DB, the PATCH API
+        # rejects all updates with an "Execution timeout" validation error even when executionTimeout
+        # is not included in the request. Workaround: delete the corrupted record and recreate it.
+        if ($response.errorMessage -and $response.errorMessage -match 'execution timeout') {
+            Write-Warning "PATCH rejected due to NME executionTimeout bug on record $id. Falling back to delete + create..."
+            $delResponse = Invoke-RestMethod -Method Delete -Uri "$baseUrl/api/v1/scripted-actions/$id" `
+                -Headers $authHeader -ContentType 'application/json' -Body '{"force":true}'
+            Test-ApiError $delResponse 'Delete (executionTimeout fallback)'
+            # NME may take a moment to free the name after delete completes — retry up to 3 times
+            $createResponse = $null
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+                Start-Sleep -Seconds 2
+                $createResponse = Invoke-RestMethod -Method Post -Uri "$baseUrl/api/v1/scripted-actions" `
+                    -Headers $authHeader -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 5)
+                if (-not $createResponse.errorMessage) {
+                    $createResponse | ConvertTo-Json -Depth 10
+                    exit 0
+                }
+                Write-Warning "  Attempt $attempt failed: $($createResponse.errorMessage)"
+            }
+            Test-ApiError $createResponse 'Create (executionTimeout fallback)'
+        }
         Test-ApiError $response 'Update scripted action'
         $response | ConvertTo-Json -Depth 10
     }

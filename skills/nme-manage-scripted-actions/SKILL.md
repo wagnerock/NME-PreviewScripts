@@ -49,7 +49,7 @@ Both scripts accept identical commands and flags.
 | Command | Description |
 |---------|-------------|
 | `list [filter]` | List scripted actions, optionally filtered by name substring |
-| `show <id>` | Show full details and script body for a scripted action |
+| `get <id>` | Show full details and script body for a scripted action |
 | `create <file.ps1> [options]` | Create a new scripted action from a PowerShell file |
 | `update <id> <file.ps1>` | Replace script body of an existing scripted action |
 | `delete <id>` | Delete a scripted action by ID |
@@ -68,11 +68,24 @@ When the user asks to upload or create a scripted action from a `.ps1` file:
 
 1. Derive the intended name from the filename (strip `.ps1`).
 2. Run `list "<name>"` to check for an exact name match.
-3. **If a match exists**, stop and ask the user:
+3. **If an exact match exists**, stop and ask the user:
    > A scripted action named **"<name>"** already exists (ID <id>). Overwrite it, or cancel?
    - **Overwrite** → run `update <id> <file.ps1>`
    - **Cancel** → abort
-4. **If no match**, run `create <file.ps1>`.
+4. **If no exact match**, scan the results for similar names (same key words, slight wording
+   differences — e.g. "Enable Login Diagnostics" vs "Enable User Login Diagnostics"). If similar
+   names exist, surface them before creating:
+   > No exact match for **"<name>"**. Similar actions exist:
+   > - **"<similar name>"** (ID <id>)
+   > Create new, or update one of these instead?
+5. **If no match at all**, run `create <file.ps1>`.
+
+## Update Failure: executionTimeout Bug
+
+If `update` fails with an error containing "Execution timeout", the NME record has a corrupted
+`executionTimeout` value that blocks all PATCH operations. The helper script handles this
+automatically by deleting the record and recreating it with the same name. This changes the
+action's ID — note that if any automations reference the action by ID they will need updating.
 
 ## GitHub-Synced Action Handling
 

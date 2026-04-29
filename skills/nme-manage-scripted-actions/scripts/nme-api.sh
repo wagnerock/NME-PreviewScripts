@@ -246,6 +246,32 @@ case "$CMD" in
       echo "GITHUB_SYNCED" >&2
       exit 2
     fi
+    # NME bug: if a CustomScript record has executionTimeout set in the DB, the PATCH API
+    # rejects all updates with an "Execution timeout" validation error even when executionTimeout
+    # is not included in the request. Workaround: delete the corrupted record and recreate it.
+    if echo "$ERROR_MSG" | grep -qi "execution timeout"; then
+      echo "WARNING: PATCH rejected due to NME executionTimeout bug on record $ID. Falling back to delete + create..." >&2
+      DEL_RESPONSE=$(curl -s -X DELETE "${NME_BASE_URL}/api/v1/scripted-actions/${ID}" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"force": true}')
+      check_api_error "$DEL_RESPONSE" "Delete (executionTimeout fallback)"
+      # NME may take a moment to free the name after delete completes — retry up to 3 times
+      for attempt in 1 2 3; do
+        sleep 2
+        CREATE_RESPONSE=$(echo "$PAYLOAD" | curl -s -X POST "${NME_BASE_URL}/api/v1/scripted-actions" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          -d @-)
+        CREATE_ERROR=$(echo "$CREATE_RESPONSE" | jq -r 'if type == "object" then .errorMessage // empty else empty end')
+        if [[ -z "$CREATE_ERROR" || "$CREATE_ERROR" == "null" ]]; then
+          echo "$CREATE_RESPONSE" | jq '.'
+          exit 0
+        fi
+        echo "  Attempt $attempt failed: $CREATE_ERROR" >&2
+      done
+      check_api_error "$CREATE_RESPONSE" "Create (executionTimeout fallback)"
+    fi
     check_api_error "$RESPONSE" "Update scripted action"
     echo "$RESPONSE" | jq '.'
     ;;

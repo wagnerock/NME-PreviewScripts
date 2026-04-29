@@ -118,6 +118,9 @@ the specified host(s) in the pool.
 
 **Important**: Host names must be FQDNs (e.g., `AD-HP-e43a.entse4.local`, not `AD-HP-e43a`).
 
+**Required Azure context**: You must provide the subscription ID, resource group, and host pool name.
+If not supplied via flags, you will be prompted interactively.
+
 ```bash
 bash "${CLAUDE_SKILL_DIR}/scripts/nme-api.sh" execute-on-hostpool <id> \
   --sub <subscriptionId> \
@@ -127,15 +130,26 @@ bash "${CLAUDE_SKILL_DIR}/scripts/nme-api.sh" execute-on-hostpool <id> \
 ```
 
 Options:
-- `--sub <subscriptionId>` - Azure subscription ID (required)
-- `--rg <resourceGroup>` - Resource group containing the host pool (required)
-- `--hostpool <name>` - Host pool name (required)
+- `--sub <subscriptionId>` - Azure subscription ID (required, or will prompt)
+- `--rg <resourceGroup>` - Resource group containing the host pool (required, or will prompt)
+- `--hostpool <name>` - Host pool name (required, or will prompt)
 - `--host <fqdn>` - Host FQDN to run on (required, repeat for multiple hosts)
 - `--no-restart` - Don't restart VMs before running
 - `--exclude-not-running` - Skip VMs that aren't running
 - `--parallelism <n>` - Max concurrent tasks (default: 5)
 - `--fail-count <n>` - Fail job after N failures (default: 1)
 - `--drain` - Enable drain mode
+
+### Getting Azure context
+
+To find the subscription ID, resource group, and host pool name:
+
+1. **List subscriptions**: Check the NME UI or ask Azure admin
+2. **List host pools in a subscription/resource group**:
+   ```bash
+   bash "${CLAUDE_SKILL_DIR}/scripts/nme-api.sh" hosts <subscriptionId> <resourceGroup> <hostPoolName>
+   ```
+3. **Find your VM**: Look in the NME UI under Host Pools > <pool> > Hosts
 
 ---
 

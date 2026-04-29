@@ -218,3 +218,4 @@ curl -s -H "Authorization: Bearer $TOKEN" "${NME_BASE_URL}/api/v1/job/${JOB_ID}/
 | 400 "SubscriptionId required" | Missing `subscriptionId` in execute body | Add subscription ID |
 | 400 "Parameter 'X' not found in param block" | CustomScript with variables but no `param()` | Add matching `param()` block |
 | Job fails instantly | Script parse error or wrong execution environment | Check script syntax; verify AzureAutomation scripts don't use CustomScript context |
+| 400 "Execution timeout can be passed only for Azure RunBook..." on PATCH | NME bug: record has `executionTimeout` set for a CustomScript action | `nme-api.sh` handles this automatically — it deletes the record and recreates it. New ID will differ. |
